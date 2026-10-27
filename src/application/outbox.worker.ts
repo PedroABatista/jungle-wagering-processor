@@ -9,28 +9,27 @@ export class OutboxWorker implements OnModuleInit {
   constructor(private readonly em: EntityManager) {}
 
   onModuleInit() {
-    // Roda a cada 5 segundos
     setInterval(() => this.processOutbox(), 5000);
   }
 
   async processOutbox() {
-    // Cria um EntityManager isolado pra este job em background
-    const em = this.em.fork(); 
-    
+    const em = this.em.fork();
     try {
       const messages = await em.find(OutboxEntity, { publishedAt: null });
       
       for (const msg of messages) {
-        this.logger.log(`[SQS SIMULADO] Publicando evento: ${msg.eventType} - ${JSON.stringify(msg.payload)}`);
-        msg.publishedAt = new Date();
-        em.persist(msg);
+        try {
+          this.logger.log(`[SQS SIMULADO] Enviando evento: ${msg.eventType} - ${JSON.stringify(msg.payload)}`);
+          msg.publishedAt = new Date();
+          em.persist(msg);
+        } catch (sendError: any) {
+          this.logger.error(`Falha ao enviar evento ${msg.id}. Vai tentar novamente.`);
+        }
       }
       
-      if (messages.length > 0) {
-        await em.flush();
-      }
-    } catch (e) {
-      this.logger.error('Erro ao processar outbox', e);
+      await em.flush();
+    } catch (e: any) {
+      this.logger.error('Erro no worker da outbox', e);
     }
   }
 }

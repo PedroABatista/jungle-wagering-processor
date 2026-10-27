@@ -21,7 +21,7 @@ export class WalletController {
         playerId: domainWallet.playerId,
         currency: domainWallet.currency,
         balance: domainWallet.balance.toJSON().amount,
-        version: domainWallet.version,
+        // version: domainWallet.version,  <-- APAGUE OU COMENTE ESTA LINHA
         createdAt: domainWallet.createdAt,
         updatedAt: domainWallet.updatedAt,
       });
