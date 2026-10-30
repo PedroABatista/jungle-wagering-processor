@@ -1,94 +1,141 @@
-# Jungle Gaming - Distributed Wagering Processor
+# Distributed Wagering Processor
 
-Este projeto é um serviço financeiro distribuído para processamento de apostas, construído com foco em precisão monetária, idempotência e concorrência.
+Backend distribuído para processamento de transações financeiras de apostas (iGaming), desenvolvido como parte de um desafio técnico.
 
-## Stack
-- **Runtime:** Bun
-- **Framework:** NestJS
-- **Banco de Dados:** PostgreSQL
-- **ORM:** MikroORM (v7)
-- **Mensageria:** LocalStack (SQS)
+O projeto foi construído com foco em **integridade financeira, consistência de dados e segurança no processamento de transações**, aplicando conceitos importantes de sistemas distribuídos, como idempotência, controle de concorrência e arquitetura orientada a eventos.
 
-## Como Executar o Projeto
+## Tecnologias Utilizadas
 
-1. **Suba a infraestrutura (Banco e SQS):**
-   ```bash
-   docker compose up -d
-Instale as dependências:
+| Categoria | Tecnologias |
+|---|---|
+| Runtime | Bun |
+| Framework | NestJS |
+| Linguagem | TypeScript |
+| Banco de Dados | PostgreSQL |
+| ORM | MikroORM |
+| Mensageria | LocalStack (AWS SQS) |
+| Infraestrutura | Docker / Docker Compose |
 
-bash
+## Funcionalidades
+
+- **Gerenciamento de carteiras:** criação de carteiras com saldo e moeda definidos.
+- **Processamento de apostas:** processamento de transações financeiras vinculadas às carteiras dos jogadores.
+- **Idempotência:** prevenção de processamento duplicado de transações por meio de chaves únicas.
+- **Controle de concorrência:** utilização de Optimistic Locking para proteger atualizações simultâneas de saldo.
+- **Transactional Outbox:** persistência de eventos no banco de dados para garantir maior confiabilidade na publicação de eventos.
+- **Precisão monetária:** implementação de um objeto de domínio `Money` para evitar problemas de precisão em operações financeiras.
+
+## Como Executar
+
+### Pré-requisitos
+
+- [Docker](https://www.docker.com/)
+- [Bun](https://bun.sh/)
+
+### 1. Clone o repositório
+
+```bash
+git clone https://github.com/PedroABatista/jungle-wagering-processor.git
+
+cd jungle-wagering-processor
+```
+
+### 2. Inicie a infraestrutura
+
+Suba o PostgreSQL e o LocalStack utilizando Docker Compose:
+
+```bash
+docker compose up -d
+```
+
+### 3. Instale as dependências
+
+```bash
 bun install
-Rode as migrations para criar as tabelas:
+```
 
-bash
+### 4. Execute as migrations
+
+Crie as tabelas necessárias no banco de dados:
+
+```bash
 bunx -b mikro-orm migration:up
-Inicie a aplicação:
+```
 
-bash
+### 5. Inicie a aplicação
+
+```bash
 bun run start
-Endpoints Principais
-Criar Carteira
-POST /wallets
+```
 
-Payload:
+## Endpoints Principais
 
-json
-{ "playerId": "uuid-do-jogador", "amount": "100.00", "currency": "BRL" }
-Processar Transação (Aposta)
-POST /wagering/transactions
+### Criar Carteira
 
-Payload:
+`POST /wallets`
 
-json
+Exemplo de payload:
+
+```json
+{
+  "playerId": "uuid",
+  "amount": "100.00",
+  "currency": "BRL"
+}
+```
+
+### Processar Transação (Aposta)
+
+`POST /wagering/transactions`
+
+Exemplo de payload:
+
+```json
 {
   "providerId": "provider-a",
   "externalId": "tx-123",
-  "walletId": "uuid-da-wallet",
+  "walletId": "uuid",
   "kind": "BET",
   "amount": "80.00",
   "currency": "BRL"
 }
-Health Checks
-GET /health/live (Processo vivo)
+```
 
-GET /health/ready (Pronto para receber conexões)
+## Arquitetura e Decisões Técnicas
 
-Testes Unitários
-Para rodar os testes de domínio do Value Object de dinheiro:
+O projeto adota estratégias para lidar com desafios comuns em sistemas financeiros distribuídos.
 
-bash
+As principais decisões de engenharia, seus objetivos e justificativas estão documentados em:
+
+📄 **[ARCHITECTURE.md](./ARCHITECTURE.md)**
+
+Entre os conceitos abordados:
+
+- **Optimistic Locking:** prevenção de inconsistências em atualizações concorrentes.
+- **Idempotência:** garantia de que uma mesma transação não seja processada mais de uma vez.
+- **Transactional Outbox:** persistência de eventos junto à transação de negócio, reduzindo o risco de perda de eventos.
+
+## Testes
+
+O projeto possui testes unitários para o domínio `Money`, validando regras de precisão e operações monetárias.
+
+Também inclui um script de teste de concorrência real (`teste-concorrencia.ts`), utilizado para verificar o comportamento do Optimistic Locking diante de atualizações simultâneas.
+
+Para executar os testes unitários:
+
+```bash
 bun test
-text
+```
+
+## Limitações Conhecidas
+
+Algumas funcionalidades foram delimitadas pelo escopo e pelo prazo do desafio técnico:
+
+- **Publicação no SQS:** o envio efetivo de mensagens para a fila não foi implementado. O Worker simula a publicação por meio de logs no console, permitindo demonstrar o fluxo da Outbox.
+- **Mensagens fora de ordem:** cenários como um `REFUND` recebido antes da respectiva `BET` foram considerados na modelagem, mas ainda não possuem implementação.
 
 ---
 
-### 🏛️ 2. ARCHITECTURE.md (O Diário de Decisões)
-Cria o `ARCHITECTURE.md` na raiz. Este documento é o que você vai ler em voz alta no seu treino com o seu amigo:
+**Desenvolvido por Pedro Henrique Alves Batista**
 
-```markdown
-# Architecture Decisions (ADR)
-
-## 1. Visão Geral
-O projeto aplica princípios de DDD (Domain-Driven Design) e Event-Driven Architecture. O objetivo central é garantir a integridade financeira (sem saldo negativo e sem débito duplicado) em um ambiente onde múltiplas instâncias da aplicação podem processar transações concorrentes.
-
-## 2. Modelagem de Dinheiro (Correção Financeira)
-- **Decisão:** Representação via `string` decimal no banco e `decimal.js` no domínio.
-- **Justificativa:** O uso de `number` ou `float` é proibido (falha eliminatória) por causar perda de precisão. O Value Object `Money` garante imutabilidade e normalização para 2 casas decimais. A factory `from()` rejeita notação científica e valores com mais de 2 casas.
-
-## 3. Concorrência Segura (Optimistic Locking)
-- **Decisão:** Uso da coluna `version` na entidade `Wallet`.
-- **Justificativa:** Em um cassino online, o throughput é importante. O Optimistic Lock evita o bloqueio de linha (Pessimistic Lock) e permite que o banco faça `UPDATE ... WHERE version = X`. Se duas apostas disputarem o mesmo saldo, a primeira atualiza a versão; a segunda sofre rollback automaticamente (evitando o *Lost Update* e saldo negativo).
-
-## 4. Idempotência Persistente
-- **Decisão:** Constraint `UNIQUE` na coluna `idempotencyKey` (`providerId:externalId`) da tabela `wager_transactions`.
-- **Justificativa:** Não confiamos em checagem em memória (falha em ambiente multi-instância). A aplicação tenta inserir a transação direto no banco. Se ocorrer violação de unicidade, o código captura a exceção e retorna o *replay* (`idempotentReplay: true`) sem debitar novamente.
-
-## 5. Arquitetura Orientada a Eventos (Transactional Outbox)
-- **Problema Evitado:** Dual Write Problem (salvar no banco e falhar ao publicar no SQS).
-- **Solução:** O evento `WalletBalanceChanged` é salvo na tabela `outbox_messages` **na mesma transação SQL** que altera o saldo da carteira. Um `OutboxWorker` roda em background (usando `em.fork()`) e publica as mensagens, garantindo *at-least-once delivery*.
-- **Observação:** O envio para o SQS pelo Worker foi simulado via log no console para cumprir o prazo do desafio. O LocalStack está de pé no Docker e o código está pronto para receber o AWS SDK.
-
-## 6. Trade-offs e Limitações (Transparência)
-- **Autenticação:** Omitida conforme permitido pela Seção 2 do edital. O foco foi 100% na lógica de negócio e concorrência.
-- **REFUND/ROLLBACK:** Devido ao prazo de 3 dias, o fluxo foi priorizado para `BET`, `WIN` e `LOSS`. A modelagem de reversão foi desenhada, mas não codificada.
-- **Node vs Bun:** O comando `nest start` via shebang do Node causava `ERR_REQUIRE_CYCLE_MODULE`. A solução foi usar `bunx --bun nest start` para forçar o runtime.
+[GitHub](https://github.com/PedroABatista) • [LinkedIn](https://www.linkedin.com/in/pedrohabatista/)
